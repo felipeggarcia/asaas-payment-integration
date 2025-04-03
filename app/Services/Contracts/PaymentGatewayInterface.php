@@ -11,5 +11,4 @@ interface PaymentGatewayInterface
     public function createPixPayment(array $data): array;
     public function getPixQrCode(string $paymentId): array;
 
-
 }

@@ -5,13 +5,31 @@ namespace App\Http\Requests;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
+/**
+ * Classe PaymentRequest
+ *
+ * Esta classe lida com as regras de validação para requisições de pagamento.
+ * Ela garante que os dados de entrada estejam no formato e valores esperados.
+ *
+ * @package App\Http\Requests
+ */
 class PaymentRequest extends FormRequest
 {
+    /**
+     * Determina se o usuário está autorizado a fazer esta requisição.
+     *
+     * @return bool Retorna true se a requisição for autorizada, false caso contrário.
+     */
     public function authorize(): bool
     {
         return true;
     }
 
+    /**
+     * Obtém as regras de validação que se aplicam à requisição.
+     *
+     * @return array Um array com as regras de validação.
+     */
     public function rules(): array
     {
         $rules = [
@@ -39,21 +57,22 @@ class PaymentRequest extends FormRequest
                 'creditCardHolderInfo.postalCode' => 'required|string',
                 'creditCardHolderInfo.addressNumber' => 'required|string|max:10',
                 'creditCardHolderInfo.phone' => 'required|string|max:20',
-
             ]);
         }
 
         return $rules;
     }
 
+    /**
+     * Obtém as mensagens de validação personalizadas para a requisição.
+     *
+     * @return array Um array com as mensagens de validação personalizadas.
+     */
     public function messages(): array
     {
         return [
             'billingType.in' => 'O tipo de pagamento deve ser CREDIT_CARD, BOLETO ou PIX',
-            'creditCard.ccv.min' => 'O CVV deve ter pelo menos 3 dígitos',
-            'creditCard.ccv.max' => 'O CVV deve ter no máximo 4 dígitos',
-            'required' => 'O campo :attribute é obrigatório',
-            'numeric' => 'O campo :attribute deve ser um número',
+            'creditCard.ccv.min' => 'O código de segurança (CCV) deve ter no mínimo 3 dígitos',
         ];
     }
 }

@@ -7,10 +7,20 @@ use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * Serviço de integração com a API do Asaas para gerenciamento de pagamentos.
+ */
 class AsaasPaymentService 
 {
+    /**
+     * @var Client Cliente HTTP para comunicação com a API do Asaas.
+     */
     private Client $client;
 
+    /**
+     * Construtor da classe.
+     * Inicializa o cliente HTTP com as configurações necessárias.
+     */
     public function __construct()
     {
         $this->client = new Client([
@@ -25,6 +35,13 @@ class AsaasPaymentService
         ]);
     }
 
+    /**
+     * Cria um cliente na API do Asaas.
+     *
+     * @param array $data Dados do cliente (nome, CPF/CNPJ, email, telefone).
+     * @return array Resposta da API com os dados do cliente criado.
+     * @throws \RuntimeException Em caso de erro na comunicação com a API.
+     */
     public function createCustomer(array $data): array
     {
         try {
@@ -43,6 +60,13 @@ class AsaasPaymentService
         }
     }
 
+    /**
+     * Cria um pagamento por boleto na API do Asaas.
+     *
+     * @param array $data Dados do pagamento (ID do cliente, valor, descrição).
+     * @return array Resposta da API com os dados do boleto criado.
+     * @throws \RuntimeException Em caso de erro na comunicação com a API.
+     */
     public function createBoletoPayment(array $data)
     {
         try {
@@ -62,7 +86,14 @@ class AsaasPaymentService
             $this->handleException($e);
         }
     }
-    
+
+    /**
+     * Cria um pagamento por PIX na API do Asaas.
+     *
+     * @param array $data Dados do pagamento (ID do cliente, valor, descrição).
+     * @return array Resposta da API com os dados do pagamento PIX criado.
+     * @throws \RuntimeException Em caso de erro na comunicação com a API.
+     */
     public function createPixPayment(array $data)
     {
         try {
@@ -82,46 +113,58 @@ class AsaasPaymentService
         }
     }
 
+    /**
+     * Cria um pagamento por cartão de crédito na API do Asaas.
+     *
+     * @param array $data Dados do pagamento e do cartão de crédito.
+     * @return array Resposta da API com os dados do pagamento criado.
+     * @throws \RuntimeException Em caso de erro na comunicação com a API.
+     */
     public function createCreditCardPayment(array $data)
     {
         try {
-
             $response = $this->client->post('payments', [
-            'json' => [
-                'billingType'=> 'CREDIT_CARD',
-                'customer'=> $data['asaas_id'],
-                'value'=>$data['value'],
-                'dueDate'=> now()->addDays(1)->format('Y-m-d'),
-                'description' => $data['description'] ?? 'Pagamento via sistema',
-        
-                'creditCard'=> [
-                  'holderName'=> $data['creditCard']['holderName'],
-                  'number'=> $data['creditCard']['number'],
-                  'expiryMonth'=> $data['creditCard']['expiryMonth'],
-                  'expiryYear'=> $data['creditCard']['expiryYear'],
-                  'ccv'=> $data['creditCard']['ccv'],
+                'json' => [
+                    'billingType'=> 'CREDIT_CARD',
+                    'customer'=> $data['asaas_id'],
+                    'value'=>$data['value'],
+                    'dueDate'=> now()->addDays(1)->format('Y-m-d'),
+                    'description' => $data['description'] ?? 'Pagamento via sistema',
+                    'creditCard'=> [
+                        'holderName'=> $data['creditCard']['holderName'],
+                        'number'=> $data['creditCard']['number'],
+                        'expiryMonth'=> $data['creditCard']['expiryMonth'],
+                        'expiryYear'=> $data['creditCard']['expiryYear'],
+                        'ccv'=> $data['creditCard']['ccv'],
+                    ],
+                    'creditCardHolderInfo'=> [
+                        'name'=> $data['creditCardHolderInfo']['name'],
+                        'cpfCnpj'=> $data['creditCardHolderInfo']['cpfCnpj'],
+                        'postalCode'=> $data['creditCardHolderInfo']['postalCode'],
+                        'addressNumber'=> $data['creditCardHolderInfo']['addressNumber'],
+                        'email'=> $data['creditCardHolderInfo']['email'],
+                        'phone'=> $data['creditCardHolderInfo']['phone'],
+                    ],
+                    'remoteIp'=> request()->ip(),
                 ],
-                'creditCardHolderInfo'=> [
-                  'name'=> $data['creditCardHolderInfo']['name'],
-                  'cpfCnpj'=> $data['creditCardHolderInfo']['cpfCnpj'],
-                  'postalCode'=> $data['creditCardHolderInfo']['postalCode'],
-                  'addressNumber'=> $data['creditCardHolderInfo']['addressNumber'],
-                  'email'=> $data['creditCardHolderInfo']['email'],
-                  'phone'=> $data['creditCardHolderInfo']['phone'],
-                ],
-                'remoteIp'=> request()->ip(),
-            ],
             ]);
 
             return json_decode($response->getBody(), true);
         } catch (GuzzleException $e) {
             if ($e->getResponse()) {
-            return json_decode($e->getResponse()->getBody(), true);
+                return json_decode($e->getResponse()->getBody(), true);
             }
             $this->handleException($e);
         }
     }
 
+    /**
+     * Obtém o QR Code de um pagamento PIX na API do Asaas.
+     *
+     * @param string $paymentId ID do pagamento.
+     * @return array Resposta da API com os dados do QR Code.
+     * @throws \RuntimeException Em caso de erro na comunicação com a API.
+     */
     public function getPixQrCode(string $paymentId): array
     {
         try {
@@ -135,6 +178,12 @@ class AsaasPaymentService
         }
     }
 
+    /**
+     * Trata exceções lançadas durante a comunicação com a API do Asaas.
+     *
+     * @param GuzzleException $e Exceção capturada.
+     * @throws \RuntimeException Lança uma exceção genérica para o sistema.
+     */
     private function handleException(GuzzleException $e): void
     {
         Log::error('Asaas API Error: ' . $e->getMessage());

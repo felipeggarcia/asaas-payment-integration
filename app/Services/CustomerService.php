@@ -8,13 +8,30 @@ use Exception;
 
 class CustomerService
 {
+    /**
+     * Serviço de integração com o Asaas.
+     *
+     * @var AsaasPaymentService
+     */
     protected $asaasPaymentService;
 
+    /**
+     * Construtor da classe CustomerService.
+     *
+     * @param AsaasPaymentService $asaasPaymentService Serviço de integração com o Asaas.
+     */
     public function __construct(AsaasPaymentService $asaasPaymentService)
     {
         $this->asaasPaymentService = $asaasPaymentService;
     }
 
+    /**
+     * Obtém ou cria um cliente com base nos dados fornecidos.
+     *
+     * @param array $customerData Dados do cliente (nome, CPF/CNPJ, email, telefone, etc.).
+     * @return Customer Cliente criado ou atualizado.
+     * @throws Exception Caso ocorra algum erro ao criar ou atualizar o cliente.
+     */
     public function getOrCreateCustomer($customerData)
     {
         try {
@@ -53,6 +70,13 @@ class CustomerService
         }
     }
 
+    /**
+     * Obtém um cliente com base no ID externo (ID do Asaas).
+     *
+     * @param string $customerAsaasId ID do cliente no Asaas.
+     * @return Customer Cliente encontrado.
+     * @throws \Illuminate\Database\Eloquent\ModelNotFoundException Caso o cliente não seja encontrado.
+     */
     public function getCustomerByExternalId($customerAsaasId)
     {
         return Customer::where('asaas_id', $customerAsaasId)->firstOrFail();
