@@ -1,0 +1,168 @@
+<?php
+namespace App\Services;
+
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Validator;
+
+use App\Models\Payment;
+
+
+class PaymentService
+{
+    protected $asaasPaymentService;
+    protected $customerService;
+
+    public function __construct(AsaasPaymentService $asaasPaymentService, CustomerService $customerService)
+    {
+        $this->asaasPaymentService = $asaasPaymentService;
+        $this->customerService = $customerService;
+    }
+  
+    public function processPayment($data)
+    {
+        switch ($data['billingType']) {
+
+            case 'BOLETO':
+            try {
+                // Criação do pagamento via Asaas
+                $asaasPaymentResponse = $this->asaasPaymentService->createBoletoPayment($data);
+
+                // Formata o payload para o banco de dados
+                $formattedPayload = $this->buildPaymentPayload($asaasPaymentResponse);
+
+                // Registra o pagamento no banco
+                $paymentRecord = $this->createPayment($formattedPayload);
+
+                // Retorna os dados relevantes para a próxima página
+                return [
+                'billingType'  => $paymentRecord->payment_method,
+                'payment_id'   => $paymentRecord->id,
+                'bank_slip_url'=> $paymentRecord->bank_slip_url,
+                ];
+            } catch (\Exception $e) {
+                throw new \RuntimeException('Erro ao processar pagamento via boleto: ' . $e->getMessage());
+            }
+
+            case 'PIX':
+            try {
+                // Criação do pagamento via Asaas
+                $paymentResponse = $this->asaasPaymentService->createPixPayment($data);
+
+                // Recupera os dados do QR Code PIX
+                $pixData = $this->asaasPaymentService->getPixQrCode($paymentResponse['id']);
+
+                // Adiciona os dados PIX ao pagamento
+                $paymentResponse = array_merge($paymentResponse, [
+                'pix_qr_code' => $pixData['encodedImage'],
+                'pix_payload' => $pixData['payload']
+                ]);
+
+                // Formata o payload para o banco de dados
+                $formattedPayload = $this->buildPaymentPayload($paymentResponse);
+
+                // Registra o pagamento no banco
+                $paymentRecord = $this->createPayment($formattedPayload);
+
+                // Retorna os dados relevantes para a próxima página
+                return [
+                'billingType'   => $paymentRecord->payment_method,
+                'payment_id'    => $paymentRecord->id,
+                'pix_qr_code'   => $paymentRecord->pix_qr_code,
+                'pix_payload'   => $paymentRecord->pix_payload,
+                ];
+            } catch (\Exception $e) {
+                throw new \RuntimeException('Erro ao processar pagamento via PIX: ' . $e->getMessage());
+            }
+
+            case 'CREDIT_CARD':
+            try {
+                // Criação do pagamento via Asaas
+                $paymentResponse = $this->asaasPaymentService->createCreditCardPayment($data);
+
+                // Verifica se tem algum erro no retorno do Asaas
+                if (isset($paymentResponse['errors']) && is_array($paymentResponse['errors'])) {
+                    $firstError = $paymentResponse['errors'][0]['description'] ?? 'Erro desconhecido';
+                    return [
+                        'billingType'   => 'CREDIT_CARD',
+                        'error'   => true,
+                        'message' => $firstError,
+                    ];
+                }
+            
+                // Formata o payload para o banco de dados
+                $formattedPayload = $this->buildPaymentPayload($paymentResponse);
+
+                // Registra o pagamento no banco
+                $paymentRecord = $this->createPayment($formattedPayload);
+
+                // Retorna os dados relevantes para a próxima página
+                return [
+                'billingType'   => $paymentRecord->payment_method,
+                'payment_id'    => $paymentRecord->id,
+                ];
+            } catch (\Exception $e) {
+                dd($e->getMessage());
+                throw new \RuntimeException('Erro ao processar pagamento via cartão de crédito: ' . $e->getMessage());
+            }
+
+            default:
+            throw new \InvalidArgumentException('Tipo de pagamento não suportado: ' . $data['billingType']);
+        }
+    }
+    public function createPayment($payload)
+    {
+            // Validação do payload
+            $validator = Validator::make($payload, [
+                'external_id'    => 'required|string|max:36',
+                'customer_id'    => 'required|string|max:255',
+                'payment_method' => 'required|string|max:255',
+                'amount'         => 'required|numeric',
+                'due_date'       => 'required|date',
+                'status'         => 'required|string|max:255',
+                'description'    => 'required|string|max:255',
+                'invoice_url'    => 'required|url',
+                'bank_slip_url'  => 'nullable|url', 
+                'pix_qr_code'    => 'nullable|string',
+                'pix_payload'    => 'nullable|string',
+            ]);
+        
+            if ($validator->fails()) {
+                return throw new \InvalidArgumentException('Para o payload possui dados inválidos para a função creatPayment: ' .$validator->errors());
+        
+            }
+            $customer=$this->customerService->getCustomerByExternalId($payload['customer_id']);
+
+            // Criar pagamento no banco
+            $payment = Payment::create([
+                'external_id' => $payload['external_id'],
+                'customer_id' => $customer->id,
+                'payment_method' => $payload['payment_method'],
+                'amount' => $payload['amount'],
+                'due_date' => $payload['due_date'],
+                'status' => $payload['status'],
+                'description' => $payload['description'],
+                'invoice_url' => $payload['invoice_url'],
+                'bank_slip_url' => $payload['bank_slip_url'],
+                'pix_qr_code' => $payload['pix_qr_code'],
+                'pix_payload' => $payload['pix_payload'],
+            ]);
+            
+        return $payment;
+    }
+    private function buildPaymentPayload(array $asaasResponse): array
+{
+    return [
+        'external_id'   => $asaasResponse['id'] ?? null,
+        'customer_id'   => $asaasResponse['customer'] ?? null,
+        'payment_method'=> $asaasResponse['billingType'] ?? null,
+        'amount'        => $asaasResponse['value'] ?? 0.0,
+        'due_date'      => $asaasResponse['dueDate'] ?? null,
+        'status'        => $asaasResponse['status'] ?? null,
+        'description'   => $asaasResponse['description'] ?? '',
+        'invoice_url'   => $asaasResponse['invoiceUrl'] ?? '',
+        'bank_slip_url' => $asaasResponse['bankSlipUrl'] ?? '',
+        'pix_qr_code'   => $asaasResponse['pix_qr_code'] ?? '',
+        'pix_payload'   => $asaasResponse['pix_payload'] ?? '',
+    ];
+}
+}

@@ -7,7 +7,7 @@ use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 use Illuminate\Support\Facades\Log;
 
-class AsaasPaymentService implements PaymentGatewayInterface
+class AsaasPaymentService 
 {
     private Client $client;
 
@@ -27,28 +27,97 @@ class AsaasPaymentService implements PaymentGatewayInterface
 
     public function createCustomer(array $data): array
     {
-        $response = $this->client->post('customers', [
-            'json' => [
-                'name' => $data['name'],
-                'cpfCnpj' => $data['cpfCnpj'],
-                'email' => $data['email'],
-                'phone' => $data['phone'],
-            ]
-        ]);
+        try {
+            $response = $this->client->post('customers', [
+                'json' => [
+                    'name' => $data['name'],
+                    'cpfCnpj' => $data['cpfCnpj'],
+                    'email' => $data['email'],
+                    'phone' => $data['phone'],
+                ],
+            ]);
 
-        return json_decode($response->getBody(), true);
+            return json_decode($response->getBody(), true);
+        } catch (GuzzleException $e) {
+            $this->handleException($e);
+        }
     }
 
-    public function createPayment(array $data): array
+    public function createBoletoPayment(array $data)
     {
         try {
             $response = $this->client->post('payments', [
-                'json' => $this->formatPaymentData($data),
-                'http_errors' => false
+                'json' => [
+                    'billingType' => 'BOLETO',
+                    'customer' => $data['asaas_id'],
+                    'value' => $data['value'],
+                    'description' => $data['description'] ?? 'Pagamento via sistema',
+                    'dueDate' => now()->addDays(3)->format('Y-m-d'),
+                    'daysAfterDueDateToRegistrationCancellation' => 1       
+                ],
             ]);
 
-            return $this->handleResponse($response);
+            return json_decode($response->getBody(), true);
         } catch (GuzzleException $e) {
+            $this->handleException($e);
+        }
+    }
+    
+    public function createPixPayment(array $data)
+    {
+        try {
+            $response = $this->client->post('payments', [
+                'json' => [
+                    'billingType' => 'PIX',
+                    'customer' => $data['asaas_id'],
+                    'value' => $data['value'],
+                    'description' => $data['description'] ?? 'Pagamento via sistema',
+                    'dueDate' => now()->addDays(1)->format('Y-m-d'),
+                ],
+            ]);
+
+            return json_decode($response->getBody(), true);
+        } catch (GuzzleException $e) {
+            $this->handleException($e);
+        }
+    }
+
+    public function createCreditCardPayment(array $data)
+    {
+        try {
+
+            $response = $this->client->post('payments', [
+            'json' => [
+                'billingType'=> 'CREDIT_CARD',
+                'customer'=> $data['asaas_id'],
+                'value'=>$data['value'],
+                'dueDate'=> now()->addDays(1)->format('Y-m-d'),
+                'description' => $data['description'] ?? 'Pagamento via sistema',
+        
+                'creditCard'=> [
+                  'holderName'=> $data['creditCard']['holderName'],
+                  'number'=> $data['creditCard']['number'],
+                  'expiryMonth'=> $data['creditCard']['expiryMonth'],
+                  'expiryYear'=> $data['creditCard']['expiryYear'],
+                  'ccv'=> $data['creditCard']['ccv'],
+                ],
+                'creditCardHolderInfo'=> [
+                  'name'=> $data['creditCardHolderInfo']['name'],
+                  'cpfCnpj'=> $data['creditCardHolderInfo']['cpfCnpj'],
+                  'postalCode'=> $data['creditCardHolderInfo']['postalCode'],
+                  'addressNumber'=> $data['creditCardHolderInfo']['addressNumber'],
+                  'email'=> $data['creditCardHolderInfo']['email'],
+                  'phone'=> $data['creditCardHolderInfo']['phone'],
+                ],
+                'remoteIp'=> request()->ip(),
+            ],
+            ]);
+
+            return json_decode($response->getBody(), true);
+        } catch (GuzzleException $e) {
+            if ($e->getResponse()) {
+            return json_decode($e->getResponse()->getBody(), true);
+            }
             $this->handleException($e);
         }
     }
@@ -60,68 +129,10 @@ class AsaasPaymentService implements PaymentGatewayInterface
                 'http_errors' => false
             ]);
 
-            return $this->handleResponse($response);
+            return json_decode($response->getBody(), true);
         } catch (GuzzleException $e) {
             $this->handleException($e);
         }
-    }
-
-    private function formatCustomerData(array $data): array
-    {
-        return [
-            'name' => $data['name'],
-            'cpfCnpj' => $data['cpfCnpj'],
-            'email' => $data['email'],
-            'mobilePhone' => $data['mobilePhone'],
-            'address' => $data['address'] ?? null,
-            'addressNumber' => $data['addressNumber'] ?? null,
-            'complement' => $data['addressComplement'] ?? null,
-            'province' => $data['province'] ?? null,
-            'postalCode' => $data['postalCode'] ?? null,
-        ];
-    }
-
-    private function formatPaymentData(array $data): array
-    {
-        $paymentData = [
-            'customer' => $data['customer'],
-            'billingType' => $data['billingType'],
-            'value' => $data['value'],
-            'dueDate' => $data['dueDate'],
-            'description' => $data['description'] ?? 'Pagamento via sistema',
-            'externalReference' => $data['externalReference'] ?? null,
-        ];
-
-        if ($data['billingType'] === 'CREDIT_CARD') {
-            $paymentData['creditCard'] = $data['creditCard'];
-            $paymentData['creditCardHolderInfo'] = $data['creditCardHolderInfo'];
-            $paymentData['remoteIp'] = request()->ip();
-        }
-
-        if ($data['billingType'] === 'BOLETO') {
-            $paymentData['daysAfterDueDateToRegistrationCancellation'] = 3;
-        }
-
-        if ($data['billingType'] === 'PIX') {
-            $paymentData['daysAfterDueDateToRegistrationCancellation'] = 1;
-        }
-
-        return $paymentData;
-    }
-
-    private function handleResponse($response): array
-    {
-        $statusCode = $response->getStatusCode();
-        $content = json_decode($response->getBody()->getContents(), true);
-
-        if ($statusCode >= 400) {
-            throw new \RuntimeException(
-                $content['errors'][0]['description'] ?? 'Erro na comunicação com o gateway de pagamento',
-                $statusCode
-            );
-        }
-
-        return $content;
     }
 
     private function handleException(GuzzleException $e): void
@@ -129,5 +140,4 @@ class AsaasPaymentService implements PaymentGatewayInterface
         Log::error('Asaas API Error: ' . $e->getMessage());
         throw new \RuntimeException('Erro temporário no processamento. Tente novamente mais tarde.', 503);
     }
-
 }

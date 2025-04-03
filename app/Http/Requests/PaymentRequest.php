@@ -18,17 +18,11 @@ class PaymentRequest extends FormRequest
             'customer.name' => 'required|string|max:255',
             'customer.cpfCnpj' => 'required|string|max:20',
             'customer.email' => 'required|email|max:255',
-            'customer.mobilePhone' => 'required|string|max:20',
-            'customer.address' => 'sometimes|string|max:255',
-            'customer.addressNumber' => 'sometimes|string|max:20',
-            'customer.addressComplement' => 'sometimes|string|max:100',
-            'customer.postalCode' => 'sometimes|string|max:10',
-            'customer.province' => 'sometimes|string|max:2',
-
+            'customer.phone' => 'required|string|max:20',
+            
             'billingType' => ['required', Rule::in(['CREDIT_CARD', 'BOLETO', 'PIX'])],
             'value' => 'required|numeric|min:0.01',
             'description' => 'nullable|string|max:500',
-            'externalReference' => 'nullable|string|max:100',
         ];
 
         if ($this->input('billingType') === 'CREDIT_CARD') {
@@ -40,11 +34,12 @@ class PaymentRequest extends FormRequest
                 'creditCard.ccv' => 'required|string|min:3|max:4',
 
                 'creditCardHolderInfo.name' => 'required|string|max:255',
-                'creditCardHolderInfo.email' => 'required|email|max:255',
                 'creditCardHolderInfo.cpfCnpj' => 'required|string|max:20',
-                'creditCardHolderInfo.postalCode' => 'required|string|max:10',
-                'creditCardHolderInfo.addressNumber' => 'required|string|max:20',
+                'creditCardHolderInfo.email' => 'required|email|max:255',
+                'creditCardHolderInfo.postalCode' => 'required|string',
+                'creditCardHolderInfo.addressNumber' => 'required|string|max:10',
                 'creditCardHolderInfo.phone' => 'required|string|max:20',
+
             ]);
         }
 

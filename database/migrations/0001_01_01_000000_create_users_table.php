@@ -12,7 +12,8 @@ return new class extends Migration
     public function up(): void
     {
         DB::statement('CREATE SCHEMA IF NOT EXISTS asaas_integration');
-        
+        DB::statement("SET time_zone = '-03:00';");
+
         Schema::create('users', function (Blueprint $table) {
             $table->id();
             $table->string('name');
