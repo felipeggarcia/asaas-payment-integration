@@ -14,10 +14,10 @@
 Certifique-se de ter os seguintes softwares instalados:
 
 - **PHP**: 8.2.28 (CLI)
-- **MariaDB**: 10.4.32
+
 - **Laravel**: 12.5.0
 - **Composer**: Instalado globalmente para gerenciar dependências do Laravel
-- **XAMPP**: Usado como servidor SQL para o banco de dados
+- **XAMPP**: Usado como servidor SQL para o banco de dados (**MariaDB**: 10.4.32)
 
 Eu usei basicamente um servidor de SQL pelo XAMPP e o Laravel foi instalado através do Composer.
 
