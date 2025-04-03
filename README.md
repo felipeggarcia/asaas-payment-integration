@@ -97,6 +97,6 @@ curl.cainfo="C:\caminho\para\cacert.pem"
 ---
 
 
-## 📄 **Licença**  
+##  **Licença**  
 Este projeto está sob a licença MIT.  
 
